@@ -11,18 +11,22 @@
 #include <utility>
 #include <vector>
 
+class ThreadWorker;
+
 class ThreadPool {
 
 public:
-  mutable std::mutex mutex;
-  std::condition_variable conditional_variable;
+  ThreadPool(int size);
 
-  std::vector<std::thread> threads;
-  bool shutdown_requested;
+  ThreadPool(const ThreadPool &) = delete;
+  ThreadPool(ThreadPool &&) = delete;
 
-  int busy_threads;
+  ThreadPool &operator=(const ThreadPool &) = delete;
+  ThreadPool &operator=(ThreadPool &&) = delete;
 
-  std::queue<std::function<void()>> queue;
+  ~ThreadPool();
+  void Shutdown();
+  int QueueSize();
 
   template <typename F, typename... Args>
   auto AddTask(F &&f, Args &&...args) -> std::future<decltype(f(args...))> {
@@ -32,7 +36,7 @@ public:
 
     // encapsulate in shared ptr to enable copying
     auto task_ptr =
-        std::make_shared<std::packaged_task<decltype(f(args...))>>(func);
+        std::make_shared<std::packaged_task<decltype(f(args...))()>>(func);
 
     // wrap function pointer into a lambda
     auto wrapper_func = [task_ptr]() { (*task_ptr)(); };
@@ -46,6 +50,19 @@ public:
     // retrun future
     return task_ptr->get_future();
   }
+
+  friend class ThreadWorker;
+
+private:
+  mutable std::mutex mutex;
+  std::condition_variable conditional_variable;
+
+  std::vector<std::thread> threads;
+  bool shutdown_requested;
+
+  int busy_threads;
+
+  std::queue<std::function<void()>> queue;
 };
 
 #endif

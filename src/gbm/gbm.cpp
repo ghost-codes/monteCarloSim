@@ -1,15 +1,19 @@
 #include "gbm.h"
 #include <cmath>
 #include <cstdlib>
-#include <ctime>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <mutex>
 #include <random>
 
+std::mutex rndGenmutex;
+std::mutex m;
 double computeZ() {
 
   // make Compute Z thread safe
   // Using lock guards
+  std::lock_guard<std::mutex> lock(rndGenmutex);
 
   // Create a random device and seed a generator
   std::random_device rd;
@@ -22,12 +26,12 @@ double computeZ() {
   double Z = distribution(generator);
 
   // Print the random value
-  std::cout << "Random Normal Value (Z): " << Z << std::endl;
+  // std::cout << "Random Normal Value (Z): " << Z << std::endl;
 
   return Z;
 }
 
-int plot(std::vector<vecDouble> data) {
+int plot(std::vector<std::shared_ptr<vecDouble>> data) {
   std::ofstream file("brownian.dat");
   if (!file) {
     std::cerr << "Error opening file!\n";
@@ -38,7 +42,7 @@ int plot(std::vector<vecDouble> data) {
   for (int id = 0; id < data.size(); id++) {
     int pos = 0;
     double x = 0.0, y = 0.0;
-    for (auto dataIt = data[id].begin(); dataIt != data[id].end(); dataIt++) {
+    for (auto dataIt = data[id]->begin(); dataIt != data[id]->end(); dataIt++) {
       y = *dataIt;
       x = pos;
       file << y << " " << x << " " << y << " " << id << "\n";
@@ -58,7 +62,7 @@ int plot(std::vector<vecDouble> data) {
   gp << "plot 'brownian.dat' using 2:3 with lines title 'Random Walk'\n";
   gp.close();
 
-  system("gnuplot -p plot.gnuplot"); // Run gnuplot
+  // system("gnuplot -p plot.gnuplot"); // Run gnuplot
 
   return 0;
 }
@@ -66,7 +70,8 @@ int plot(std::vector<vecDouble> data) {
 GBM::GBM(double T, double N, double currentPrice, double vol, double riskFree,
          double yield)
     : d_dt(T / N), d_volatility(vol), d_riskFree(riskFree),
-      d_dividendYield(yield), d_N(N), d_values(), d_initPrice(currentPrice) {}
+      d_dividendYield(yield), d_N(N), d_values(), d_initPrice(currentPrice),
+      d_thread_pool(1500) {}
 
 double GBM::getStep(double currentPrice) {
   double z = computeZ();
@@ -78,23 +83,27 @@ double GBM::getStep(double currentPrice) {
   return result;
 }
 
-void GBM::generatePath(int id) {
-  std::cout << d_dt << " " << d_values[id][0] << std::endl;
-  std::cout << "Index 0: " << d_values[id][0] << std::endl;
-  for (int i = 0; i <= d_N; i++) {
-    double nextValue = getStep(d_values[id][i]);
-    d_values[id].push_back(nextValue);
+int generatePath(GBM *gbm, std::shared_ptr<vecDouble> vec, int N) {
+  for (int i = 0; i <= N; i++) {
+    double nextValue = gbm->getStep((*vec)[i]);
+    vec->push_back(nextValue);
   }
+  return 0;
 }
 
 void GBM::compute() {
-  int number_of_threads = 1000000;
-  for (int i = 0; i < number_of_threads; i++) {
-    auto tempVec = std::vector<double>();
-    tempVec.push_back(d_initPrice);
+  int number_of_tasks = 1000000;
+  for (int i = 0; i < number_of_tasks; i++) {
+    auto tempVec = std::make_shared<vecDouble>();
+    tempVec->push_back(d_initPrice);
     d_values.push_back(tempVec);
-    generatePath(i);
+    std::cout << "id: " << i << " :" << d_values.size() << std::endl;
+    d_thread_pool.AddTask(generatePath, this, d_values[i], d_N);
   }
+
+  while (d_thread_pool.QueueSize() != 0) {
+  }
+  std::cout << d_values.size() << std::endl;
 
   plot(d_values);
 }

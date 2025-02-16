@@ -6,7 +6,7 @@ project(monteCarlo VERSION 1.0)
 
 add_subdirectory(models)
 add_subdirectory(GBM)
-add_subdirectory(threadpool)
+
 
 add_executable(${PROJECT_NAME}.tsk main.cpp)
 

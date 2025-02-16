@@ -1,5 +1,6 @@
 #include "thread_worker.h"
 #include "thread_pool.h"
+#include <iostream>
 #include <mutex>
 
 ThreadWorker::ThreadWorker(ThreadPool *pool) : d_thread_pool(pool) {}
@@ -10,7 +11,7 @@ void ThreadWorker::operator()() {
     d_thread_pool->busy_threads--;
     d_thread_pool->conditional_variable.wait(lock, [this] {
       return this->d_thread_pool->shutdown_requested ||
-             this->d_thread_pool->queue.empty();
+             !this->d_thread_pool->queue.empty();
     });
 
     d_thread_pool->busy_threads++;
@@ -20,7 +21,9 @@ void ThreadWorker::operator()() {
       d_thread_pool->queue.pop();
 
       lock.unlock();
+      // std::cout << "Start ..." << std::endl;
       func();
+      // std::cout << "End ..." << std::endl;
       lock.lock();
     }
   }
