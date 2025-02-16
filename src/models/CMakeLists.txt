@@ -1,0 +1,1 @@
+add_library(models input_variables.cpp)
