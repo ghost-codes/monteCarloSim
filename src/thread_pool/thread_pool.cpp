@@ -31,3 +31,5 @@ int ThreadPool::QueueSize() {
   std::lock_guard<std::mutex> lock(mutex);
   return queue.size();
 }
+
+bool ThreadPool::isPoolDone() { return busy_threads == 0; }

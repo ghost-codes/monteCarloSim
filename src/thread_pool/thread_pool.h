@@ -27,6 +27,7 @@ public:
   ~ThreadPool();
   void Shutdown();
   int QueueSize();
+  bool isPoolDone();
 
   template <typename F, typename... Args>
   auto AddTask(F &&f, Args &&...args) -> std::future<decltype(f(args...))> {
